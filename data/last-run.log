@@ -1,0 +1,11 @@
+ninja-relay - snapshotting poe.ninja poe1 economy API (/poe1/api/economy/*)
+User-Agent: ninja-relay/1.0 (+https://github.com/search?q=ninja-relay; contact: github.com/jaysonsmith1998-rgb)
+Discovering current league from https://poe.ninja/poe1/api/economy/leagues
+League: Allflame  [discovered from /leagues]
+Fetching exchange ...
+  ERROR: HTTP 400 Bad Request - leaving any previous exchange.json untouched
+Fetching currency ...
+  ERROR: HTTP 400 Bad Request - leaving any previous currency.json untouched
+Fetching items ...
+  ERROR: HTTP 400 Bad Request - leaving any previous items.json untouched
+Wrote index.json - 0 file(s), 3 error(s)
