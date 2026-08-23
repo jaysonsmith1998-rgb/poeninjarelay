@@ -120,8 +120,9 @@ CATEGORIES = [
     {"key": "item:UniqueJewel", "endpoint": "/stash/current/item/overview",
      "type": "UniqueJewel", "out": "unique-jewels.json", "about": "Unique jewels."},
     {"key": "item:SkillGem", "endpoint": "/stash/current/item/overview",
-     "type": "SkillGem", "out": "skill-gems.json",
-     "about": "Skill gems - levelled, quality and corrupted variants."},
+     "type": "SkillGem", "out": "skill-gems.json", "dedupe": "cheapest-per-name",
+     "about": "Skill gems, one row per gem at its cheapest listed variant - "
+              "the 'can I just buy this' price, not the 21/23 corrupted price."},
     {"key": "item:ClusterJewel", "endpoint": "/stash/current/item/overview",
      "type": "ClusterJewel", "out": "cluster-jewels.json", "about": "Cluster jewels."},
 ]
@@ -645,6 +646,29 @@ def build_category_file(category, league, records, source_status):
         item = trim_record(raw, league_slug, category["slug"])
         if item is not None:
             trimmed.append(item)
+
+    if records and not trimmed:
+        # The response had rows but not one of them survived trimming, which
+        # means this endpoint names its fields differently. Print the field
+        # names of the first row: that is the whole diagnosis, and without it
+        # you get a silent empty file and no idea why.
+        first = next((r for r in records if isinstance(r, dict)), None)
+        if first is not None:
+            log("  NOTE: {} rows returned but none had a usable name+price. "
+                "Fields present: {}".format(len(records), sorted(first.keys())))
+
+    # Some categories list one row per variant. For build planning the useful
+    # question is "what does this cost at all", so collapse to the cheapest
+    # variant per name rather than letting the cap keep only the priciest
+    # corrupted 21/23 versions - which is precisely backwards.
+    if category.get("dedupe") == "cheapest-per-name":
+        best = {}
+        for item in trimmed:
+            key = item.get("name")
+            current = best.get(key)
+            if current is None or (item.get("chaos") or 0) < (current.get("chaos") or 0):
+                best[key] = item
+        trimmed = list(best.values())
 
     # Sort by value so that, when the cap bites, the long tail of near-worthless
     # entries is what gets dropped rather than the things people ask about.
@@ -1223,6 +1247,26 @@ def selftest():
         check(all(q["league"][0] == "Mercenaries" for q in parsed),
               "the league value from /leagues is what gets sent")
         check(LEAGUES_URL in SEEN_URLS, "the leagues endpoint is asked first")
+
+        # -- G3: variant collapsing keeps the affordable end ------------------
+        print("G3. cheapest-per-name dedupe")
+        cat = dict(next(c for c in CATEGORIES if c.get("dedupe") == "cheapest-per-name"))
+        rows = [
+            {"name": "Empower Support", "variant": "4c", "chaosValue": 90000, "listingCount": 3},
+            {"name": "Empower Support", "variant": "1", "chaosValue": 12, "listingCount": 400},
+            {"name": "Empower Support", "variant": "3", "chaosValue": 3000, "listingCount": 40},
+            {"name": "Fireball", "variant": "20/20", "chaosValue": 5, "listingCount": 900},
+        ]
+        doc, _n = build_category_file(cat, "Testleague", rows, 200)
+        names = [r["name"] for r in doc["records"]]
+        check(len(doc["records"]) == 2, "one row survives per gem name")
+        check(sorted(names) == ["Empower Support", "Fireball"], "both gems are kept")
+        empower = [r for r in doc["records"] if r["name"] == "Empower Support"][0]
+        check(empower["chaos"] == 12,
+              "the cheapest variant is the one kept, not the most expensive")
+        plain = dict(cat); plain.pop("dedupe")
+        doc2, _n2 = build_category_file(plain, "Testleague", rows, 200)
+        check(len(doc2["records"]) == 4, "categories without dedupe keep every variant")
 
         # -- H: we only ever talk to allowed endpoints ------------------------
         print("H. endpoint allowlist")
