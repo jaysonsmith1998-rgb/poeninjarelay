@@ -87,7 +87,14 @@ jobs:
           # league by itself. Set the POE_NINJA_LEAGUE repository variable (same
           # place as above) to pin it - e.g. to "Standard".
           POE_NINJA_LEAGUE: ${{ github.event.inputs.league || vars.POE_NINJA_LEAGUE }}
-        run: python3 snapshot.py
+        # The log is teed into data/last-run.log and committed with everything
+        # else. GitHub's Actions log pages are only readable in a browser, so
+        # committing the log is what makes a failed run diagnosable by anything
+        # that can read a raw file URL - which is the whole point of this repo.
+        run: |
+          mkdir -p data
+          python3 snapshot.py 2>&1 | tee data/last-run.log
+          exit ${PIPESTATUS[0]}
 
       - name: Commit the snapshot if anything changed
         # `always()` so we still commit a partial snapshot even if the step
