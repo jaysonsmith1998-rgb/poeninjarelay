@@ -89,26 +89,49 @@ LEAGUES_URL = API_ROOT + "/leagues"
 
 # Each category becomes one file in data/. Keep this list short - a wide net is
 # exactly the "replicating the site" behaviour poe.ninja asks people not to do.
+# Every one of these endpoints requires BOTH `league` and `type`. Omitting
+# `type` returns HTTP 400 with an empty body, which tells you nothing.
+#
+# The full `type` lists run to ~48 values. Snapshotting all of them would be
+# mirroring the site, which poe.ninja explicitly asks people not to do. This is
+# the subset that answers "can this build afford that item yet" - uniques, gems,
+# jewels and currency - and nothing else.
 CATEGORIES = [
-    {
-        "key": "exchange",
-        "url": API_ROOT + "/exchange/current/overview",
-        "out": "exchange.json",
-        "about": "Currency exchange rates (the in-game currency exchange).",
-    },
-    {
-        "key": "currency",
-        "url": API_ROOT + "/stash/current/currency/overview",
-        "out": "currency.json",
-        "about": "Currency priced from public stash listings.",
-    },
-    {
-        "key": "items",
-        "url": API_ROOT + "/stash/current/item/overview",
-        "out": "items.json",
-        "about": "Items priced from public stash listings.",
-    },
+    {"key": "exchange:Currency", "endpoint": "/exchange/current/overview",
+     "type": "Currency", "out": "exchange-currency.json",
+     "about": "In-game currency exchange rates."},
+
+    {"key": "currency:Currency", "endpoint": "/stash/current/currency/overview",
+     "type": "Currency", "out": "currency.json",
+     "about": "Currency priced from public stash listings."},
+    {"key": "currency:Fragment", "endpoint": "/stash/current/currency/overview",
+     "type": "Fragment", "out": "fragments.json",
+     "about": "Fragments priced from public stash listings."},
+
+    {"key": "item:UniqueWeapon", "endpoint": "/stash/current/item/overview",
+     "type": "UniqueWeapon", "out": "unique-weapons.json", "about": "Unique weapons."},
+    {"key": "item:UniqueArmour", "endpoint": "/stash/current/item/overview",
+     "type": "UniqueArmour", "out": "unique-armour.json", "about": "Unique armour."},
+    {"key": "item:UniqueAccessory", "endpoint": "/stash/current/item/overview",
+     "type": "UniqueAccessory", "out": "unique-accessories.json",
+     "about": "Unique rings, amulets and belts."},
+    {"key": "item:UniqueFlask", "endpoint": "/stash/current/item/overview",
+     "type": "UniqueFlask", "out": "unique-flasks.json", "about": "Unique flasks."},
+    {"key": "item:UniqueJewel", "endpoint": "/stash/current/item/overview",
+     "type": "UniqueJewel", "out": "unique-jewels.json", "about": "Unique jewels."},
+    {"key": "item:SkillGem", "endpoint": "/stash/current/item/overview",
+     "type": "SkillGem", "out": "skill-gems.json",
+     "about": "Skill gems - levelled, quality and corrupted variants."},
+    {"key": "item:ClusterJewel", "endpoint": "/stash/current/item/overview",
+     "type": "ClusterJewel", "out": "cluster-jewels.json", "about": "Cluster jewels."},
 ]
+for _c in CATEGORIES:
+    _c["url"] = API_ROOT + _c["endpoint"]
+    # poe.ninja's own economy pages live at /poe1/economy/<league>/<slug>/<item>,
+    # and the output filenames already match those slugs, so derive rather than
+    # duplicate. The category *key* is not usable here - it contains a colon.
+    _c["slug"] = _c["out"][:-5] if _c["out"].endswith(".json") else _c["out"]
+
 
 # ---------------------------------------------------------------------------
 # 3. TUNABLES (all overridable by environment variable, so the workflow can set
@@ -241,7 +264,18 @@ def http_get_json(url, contact, etag=None, last_modified=None):
                 # Not an error - our cached copy is still current.
                 return {"status": 304, "data": None, "etag": etag,
                         "last_modified": last_modified, "error": None}
-            last_error = "HTTP {} {}".format(exc.code, exc.reason)
+            # Read the body. An HTTP 400 from this API arrives with no
+            # explanation in the status line, and the body is the only place
+            # that says which parameter it disliked. Without this you are
+            # reduced to guessing, which costs hours.
+            detail = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace").strip()
+                if body:
+                    detail = " - body: {}".format(body[:400])
+            except Exception:
+                pass
+            last_error = "HTTP {} {}{}".format(exc.code, exc.reason, detail)
             # 4xx other than 429 will not fix themselves; stop early.
             if exc.code < 500 and exc.code != 429:
                 break
@@ -448,6 +482,20 @@ def league_names_from_payload(payload):
     return out
 
 
+def league_id_of(rec, fallback_name):
+    """The value to send as ?league=.
+
+    poe.ninja's docs are explicit: the leagues endpoint returns `id` and `name`,
+    and it is the *id* that the other endpoints want. Sending the human-readable
+    name gets an HTTP 400 with no explanation, which is a genuinely horrible
+    hour to spend, so this is deliberate rather than defensive.
+    """
+    ident = pick(rec, "id", "leagueId", "slug")
+    if isinstance(ident, (str, int)) and str(ident).strip():
+        return str(ident).strip()
+    return fallback_name
+
+
 def league_has_ended(rec):
     """True only when we can positively prove the league is over."""
     ends = pick(rec, "endAt", "endsAt", "endTime", "end")
@@ -477,7 +525,7 @@ def choose_league(payload):
     """
     candidates = league_names_from_payload(payload)
     if not candidates:
-        return None, "leagues response contained no recognisable league names"
+        return None, None, "leagues response contained no recognisable league names"
 
     survivors = []
     for name, rec in candidates:
@@ -495,15 +543,16 @@ def choose_league(payload):
                 log("  note: league {!r} has an end date in the past; skipping"
                     .format(name))
                 continue
-            survivors.append(name)
+            survivors.append((league_id_of(rec, name), name))
 
     if survivors:
-        return survivors[0], None
+        return survivors[0][0], survivors[0][1], None
 
-    for name, _rec in candidates:
+    for name, rec in candidates:
         if name.lower() == "standard":
-            return name, "no temporary challenge league found; fell back to Standard"
-    return None, "could not identify a usable league from the leagues endpoint"
+            return (league_id_of(rec, name), name,
+                    "no temporary challenge league found; fell back to Standard")
+    return None, None, "could not identify a usable league from the leagues endpoint"
 
 
 # ---------------------------------------------------------------------------
@@ -593,7 +642,7 @@ def build_category_file(category, league, records, source_status):
     trimmed = []
     league_slug = slugify(league)
     for raw in records:
-        item = trim_record(raw, league_slug, category["key"])
+        item = trim_record(raw, league_slug, category["slug"])
         if item is not None:
             trimmed.append(item)
 
@@ -634,6 +683,7 @@ def run(fetch, data_dir, league_override=None, contact="selftest"):
 
     # --- league ------------------------------------------------------------
     league = (league_override or "").strip() or None
+    league_label = league
     league_source = "override (POE_NINJA_LEAGUE)" if league else None
     leagues_seen = []
 
@@ -645,7 +695,7 @@ def run(fetch, data_dir, league_override=None, contact="selftest"):
             log("  ERROR: {}".format(result["error"]))
         else:
             leagues_seen = [n for n, _ in league_names_from_payload(result["data"])]
-            league, note = choose_league(result["data"])
+            league, league_label, note = choose_league(result["data"])
             if note:
                 log("  note: {}".format(note))
                 errors.append("leagues: {}".format(note))
@@ -667,14 +717,17 @@ def run(fetch, data_dir, league_override=None, contact="selftest"):
         write_json_atomic(os.path.join(data_dir, "index.json"), index)
         return 1, index
 
-    log("League: {}  [{}]".format(league, league_source))
+    if league_label and league_label != league:
+        log("League: {} (id {})  [{}]".format(league_label, league, league_source))
+    else:
+        log("League: {}  [{}]".format(league, league_source))
 
     # --- categories --------------------------------------------------------
     for category in CATEGORIES:
         log("Fetching {} ...".format(category["key"]))
-        # The league is passed as a query parameter. If a given endpoint does
-        # not use it, an unknown query parameter is harmless.
-        url = category["url"] + "?" + urllib.parse.urlencode({"league": league})
+        # Both parameters are required by every one of these endpoints.
+        url = category["url"] + "?" + urllib.parse.urlencode(
+            {"league": league, "type": category["type"]})
         cached = cache.get(url) if isinstance(cache.get(url), dict) else {}
         out_path = os.path.join(data_dir, category["out"])
         have_existing = os.path.exists(out_path)
@@ -835,8 +888,23 @@ FAKE_EXCHANGE = {
 }
 
 
+# Derived from CATEGORIES rather than hardcoded: the output filenames are
+# config, and a test that hardcodes them silently rots the moment the config
+# changes - which is exactly how this file shipped broken once already.
+ITEM_FILE = next(c["out"] for c in CATEGORIES
+                 if c["endpoint"].endswith("/item/overview"))
+EXCHANGE_FILE = next(c["out"] for c in CATEGORIES
+                     if c["endpoint"].endswith("/exchange/current/overview"))
+CURRENCY_FILE = next(c["out"] for c in CATEGORIES
+                     if c["endpoint"].endswith("/currency/overview")
+                     and c["type"] == "Currency")
+
+SEEN_URLS = []
+
+
 def fake_fetch(url, etag=None, last_modified=None):
     """Stand-in for http_get_json with the same return contract."""
+    SEEN_URLS.append(url)
     base = url.split("?")[0]
     if base == LEAGUES_URL:
         payload = FAKE_LEAGUES
@@ -905,7 +973,7 @@ def selftest():
                   "every listed file carries a record count")
 
             # the items file
-            items = json.load(open(os.path.join(tmp, "items.json"),
+            items = json.load(open(os.path.join(tmp, ITEM_FILE),
                                    encoding="utf-8"))
             check(items["league"] == "Mercenaries", "items.json records the league")
             check(items["recordCount"] == 5,
@@ -920,8 +988,12 @@ def selftest():
             check(top["chaos"] == 96000, "chaos value carried through")
             check(top["divine"] == 480, "divine value carried through")
             check(top["listings"] == 42, "listing count carried through")
-            check(top["link"].startswith("https://poe.ninja/poe1/economy/mercenaries/items/"),
-                  "link back to poe.ninja is built from the league slug")
+            item_slug = next(c["slug"] for c in CATEGORIES if c["out"] == ITEM_FILE)
+            check(top["link"].startswith(
+                      "https://poe.ninja/poe1/economy/mercenaries/{}/".format(item_slug)),
+                  "link is built from the league and category slugs")
+            check(":" not in top["link"].split("//", 1)[1],
+                  "no category key leaks a colon into the link")
             check(set(top) <= {"name", "base", "variant", "links", "gemLevel",
                                "gemQuality", "mapTier", "chaos", "divine",
                                "listings", "id", "link"},
@@ -936,13 +1008,13 @@ def selftest():
                   "gem level/quality kept (they change the price)")
 
             # currency uses different field names entirely
-            currency = json.load(open(os.path.join(tmp, "currency.json"),
+            currency = json.load(open(os.path.join(tmp, CURRENCY_FILE),
                                       encoding="utf-8"))
             div = [r for r in currency["records"] if r["name"] == "Divine Orb"][0]
             check(div["chaos"] == 200,
                   "currencyTypeName/chaosEquivalent shape understood")
 
-            exchange = json.load(open(os.path.join(tmp, "exchange.json"),
+            exchange = json.load(open(os.path.join(tmp, EXCHANGE_FILE),
                                       encoding="utf-8"))
             check(exchange["recordCount"] == 2, "nested {data:{items:[]}} unwrapped")
 
@@ -981,17 +1053,20 @@ def selftest():
         with tempfile.TemporaryDirectory() as tmp:
             code, index = run(half_broken, tmp, contact="selftest")
             check(code == 0, "a partial snapshot is still a successful run")
-            check(not os.path.exists(os.path.join(tmp, "items.json")),
+            check(not os.path.exists(os.path.join(tmp, ITEM_FILE)),
                   "the failed category wrote no file")
-            check(os.path.exists(os.path.join(tmp, "currency.json")),
+            check(os.path.exists(os.path.join(tmp, CURRENCY_FILE)),
                   "the healthy categories still wrote theirs")
-            check(len(index["errors"]) == 1, "the one failure is recorded")
+            broken = sum(1 for c in CATEGORIES
+                         if "/stash/current/item/overview" in c["url"])
+            check(len(index["errors"]) == broken,
+                  "every failed category is recorded, and only those")
 
         # -- D: 304 keeps the existing file untouched ------------------------
         print("D. conditional requests / 304 Not Modified")
         with tempfile.TemporaryDirectory() as tmp:
             run(fake_fetch, tmp, contact="selftest")
-            path = os.path.join(tmp, "items.json")
+            path = os.path.join(tmp, ITEM_FILE)
             before = open(path, encoding="utf-8").read()
 
             def not_modified(url, etag=None, last_modified=None):
@@ -1017,7 +1092,7 @@ def selftest():
         print("D2. unchanged data is not rewritten")
         with tempfile.TemporaryDirectory() as tmp:
             run(fake_fetch, tmp, contact="selftest")
-            path = os.path.join(tmp, "items.json")
+            path = os.path.join(tmp, ITEM_FILE)
             before_bytes = open(path, "rb").read()
             before_mtime = os.stat(path).st_mtime_ns
             time.sleep(0.01)
@@ -1043,7 +1118,7 @@ def selftest():
             after = json.load(open(path, encoding="utf-8"))
             check(after["records"][0]["chaos"] == 111111,
                   "a real price change IS written")
-            items_entry = [f for f in index["files"] if f["file"] == "items.json"][0]
+            items_entry = [f for f in index["files"] if f["file"] == ITEM_FILE][0]
             check(items_entry["status"] == "updated",
                   "index reports the changed category as updated")
 
@@ -1060,6 +1135,12 @@ def selftest():
         check(trim_record("garbage", "l", "c") is None, "non-dict is rejected")
         check(to_num("not a number") is None, "unparsable number becomes None")
         check(choose_league([])[0] is None, "empty leagues list is reported, not guessed")
+        check(choose_league([{"id": "allflame", "name": "Allflame"}])[0] == "allflame",
+              "the league id is what gets sent, not the display name")
+        check(choose_league([{"id": "allflame", "name": "Allflame"}])[1] == "Allflame",
+              "the display name is kept for the log")
+        check(choose_league([{"name": "Allflame"}])[0] == "Allflame",
+              "falls back to the name when no id is present")
         check(choose_league([{"name": "Standard"}])[0] == "Standard",
               "falls back to Standard when there is no temp league")
         check(choose_league([{"name": "Hardcore"}])[0] is None,
@@ -1120,6 +1201,29 @@ def selftest():
         check(resolve_contact() is not None or "PUT-YOUR" in (saved_const or ""),
               "a configured contact survives the test unchanged")
 
+        # -- G2: the request actually carries what the API demands ------------
+        # This is the regression guard for a real outage: the first version sent
+        # only ?league=<display name> and every data endpoint answered HTTP 400
+        # with an empty body. Both parameters are required, and `league` wants
+        # the id from /leagues, not the human-readable name.
+        print("G2. request parameters")
+        del SEEN_URLS[:]
+        with tempfile.TemporaryDirectory() as tmp:
+            run(fake_fetch, tmp, contact="selftest")
+        data_urls = [u for u in SEEN_URLS if not u.startswith(LEAGUES_URL)]
+        check(bool(data_urls), "data endpoints were called at all")
+        parsed = [urllib.parse.parse_qs(urllib.parse.urlparse(u).query) for u in data_urls]
+        check(all("league" in q for q in parsed), "every data request sends ?league=")
+        check(all("type" in q for q in parsed), "every data request sends ?type=")
+        check(all(q["type"][0] for q in parsed), "no request sends an empty type")
+        sent_types = {q["type"][0] for q in parsed}
+        check(sent_types == {c["type"] for c in CATEGORIES},
+              "every configured category type is requested exactly once")
+        check(len(data_urls) == len(CATEGORIES), "one request per category, no repeats")
+        check(all(q["league"][0] == "Mercenaries" for q in parsed),
+              "the league value from /leagues is what gets sent")
+        check(LEAGUES_URL in SEEN_URLS, "the leagues endpoint is asked first")
+
         # -- H: we only ever talk to allowed endpoints ------------------------
         print("H. endpoint allowlist")
         allowed = {
@@ -1146,7 +1250,7 @@ def selftest():
             text = buffer.getvalue()
             check(rc == 0, "--summary exits 0")
             check("Mercenaries" in text, "summary names the league")
-            check("items.json" in text, "summary lists the files written")
+            check(ITEM_FILE in text, "summary lists the files written")
             check("poe.ninja" in text, "summary carries the attribution")
 
             buffer = io.StringIO()
