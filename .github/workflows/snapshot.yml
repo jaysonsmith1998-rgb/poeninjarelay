@@ -1,1 +1,129 @@
+# ---------------------------------------------------------------------------
+# ninja-relay - hourly poe.ninja economy snapshot
+# ---------------------------------------------------------------------------
+# WHAT THIS DOES
+#   Once an hour, GitHub runs a temporary computer ("a runner") that fetches
+#   poe.ninja's public economy API, trims the data right down, and commits the
+#   result into the data/ folder of this repository. Nothing else reads or
+#   writes anything.
+#
+# WHY IT IS SHAPED LIKE THIS
+#   Some tools cannot reach poe.ninja directly (restricted networks, sandboxes,
+#   corporate proxies) but CAN reach raw.githubusercontent.com. Committing the
+#   JSON here turns "a website I can't reach" into "a file I can read".
+#
+# YOU CAN RUN IT BY HAND
+#   Actions tab -> "Hourly poe.ninja snapshot" -> "Run workflow".
+#
+# TO TURN IT OFF
+#   Actions tab -> "Hourly poe.ninja snapshot" -> the "..." menu (top right)
+#   -> "Disable workflow". Nothing is deleted; re-enable it the same way.
+# ---------------------------------------------------------------------------
 
+name: Hourly poe.ninja snapshot
+
+on:
+  schedule:
+    # Hourly, at 17 minutes past. Deliberately NOT on the hour: everybody's
+    # cron jobs fire at :00, GitHub queues them, and yours runs late. poe.ninja's
+    # underlying data only refreshes every ~15 minutes, so hourly is already
+    # more often than it needs to be - please do not make this faster.
+    - cron: "17 * * * *"
+
+  # Lets you press the button yourself from the Actions tab.
+  workflow_dispatch:
+    inputs:
+      league:
+        description: "League name to force (leave blank to auto-detect)"
+        required: false
+        default: ""
+
+# The job needs to push its own commits back into this repo. That is the only
+# permission it gets - it cannot read secrets, open issues, or touch anything
+# else. No tokens of yours are involved anywhere.
+permissions:
+  contents: write
+
+# If a run is somehow still going when the next hour comes around, let the old
+# one finish rather than having two of them fight over the same commit.
+concurrency:
+  group: ninja-relay-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Cheap insurance: this runs offline in about a second and proves the
+      # script itself is intact before we bother poe.ninja with real requests.
+      - name: Self-test (no network)
+        run: python3 snapshot.py --selftest
+
+      - name: Fetch snapshot from poe.ninja
+        # `continue-on-error` means a bad day at poe.ninja shows up as a yellow
+        # warning, not a red failure email every hour. Whatever data DID come
+        # back is still committed by the next step.
+        continue-on-error: true
+        env:
+          # Your contact string, so poe.ninja can reach you before they block
+          # you. Set it in: Settings > Secrets and variables > Actions >
+          # Variables tab > New repository variable, named POE_NINJA_CONTACT.
+          # If it is not set here, snapshot.py falls back to the CONTACT
+          # constant inside the script - and refuses to run if that is still
+          # the placeholder.
+          POE_NINJA_CONTACT: ${{ vars.POE_NINJA_CONTACT }}
+
+          # Optional. Leave unset and the script finds the current challenge
+          # league by itself. Set the POE_NINJA_LEAGUE repository variable (same
+          # place as above) to pin it - e.g. to "Standard".
+          POE_NINJA_LEAGUE: ${{ github.event.inputs.league || vars.POE_NINJA_LEAGUE }}
+        run: python3 snapshot.py
+
+      - name: Commit the snapshot if anything changed
+        # `always()` so we still commit a partial snapshot even if the step
+        # above reported trouble. index.json records what failed, which is
+        # information a consumer wants.
+        if: always()
+        run: |
+          set -euo pipefail
+
+          # Commits are authored by GitHub's own bot account, not by you.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # If the script bailed before writing anything, data/ may not exist
+          # yet and `git add` would error out. An empty folder is invisible to
+          # git, so this is free.
+          mkdir -p data
+          git add -A data
+
+          # `git diff --cached --quiet` exits 0 when there is nothing staged.
+          # Skipping the commit in that case keeps the history readable instead
+          # of 24 empty commits a day.
+          if git diff --cached --quiet; then
+            echo "No change in the data - nothing to commit."
+            exit 0
+          fi
+
+          LEAGUE="$(python3 -c "import json;print(json.load(open('data/index.json')).get('league') or 'unknown')" 2>/dev/null || echo unknown)"
+          git commit -m "data: poe.ninja snapshot (${LEAGUE}) $(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          # Retry the push once: another run (or your own edit) may have landed
+          # a commit while we were working.
+          git push || (git pull --rebase && git push)
+
+      # Writes the little report you see on the run's page in the Actions tab,
+      # so you can tell at a glance whether it worked without reading the log.
+      - name: Write run summary
+        if: always()
+        run: python3 snapshot.py --summary >> "$GITHUB_STEP_SUMMARY"
