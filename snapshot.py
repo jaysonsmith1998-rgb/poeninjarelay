@@ -1086,17 +1086,39 @@ def selftest():
 
         # -- G: contact enforcement ------------------------------------------
         print("G. contact string enforcement")
+        # Both inputs have to be controlled here, not just the environment.
+        # Editing the CONTACT constant is the documented setup step, so a test
+        # that only clears the env var starts reading the user's real contact
+        # and fails the moment they follow the instructions - which stops the
+        # whole run before it ever reaches poe.ninja. Save and restore both.
+        globals_ = globals()
         saved_env = os.environ.pop("POE_NINJA_CONTACT", None)
-        check(resolve_contact() is None,
-              "refuses to run with the placeholder contact")
-        os.environ["POE_NINJA_CONTACT"] = "github.com/example"
-        check(resolve_contact() == "github.com/example",
-              "repository variable supplies the contact")
-        check("github.com/example" in user_agent(resolve_contact()),
-              "contact appears in the User-Agent header")
-        os.environ.pop("POE_NINJA_CONTACT", None)
-        if saved_env is not None:
-            os.environ["POE_NINJA_CONTACT"] = saved_env
+        saved_const = globals_["CONTACT"]
+        try:
+            globals_["CONTACT"] = "PUT-YOUR-CONTACT-HERE"
+            check(resolve_contact() is None,
+                  "refuses to run with the placeholder contact")
+            globals_["CONTACT"] = ""
+            check(resolve_contact() is None,
+                  "refuses to run with an empty contact")
+            globals_["CONTACT"] = "me"
+            check(resolve_contact() is None,
+                  "refuses to run with a too-short contact")
+            globals_["CONTACT"] = "github.com/in-file"
+            check(resolve_contact() == "github.com/in-file",
+                  "the in-file CONTACT constant supplies the contact")
+            os.environ["POE_NINJA_CONTACT"] = "github.com/example"
+            check(resolve_contact() == "github.com/example",
+                  "repository variable overrides the in-file constant")
+            check("github.com/example" in user_agent(resolve_contact()),
+                  "contact appears in the User-Agent header")
+        finally:
+            globals_["CONTACT"] = saved_const
+            os.environ.pop("POE_NINJA_CONTACT", None)
+            if saved_env is not None:
+                os.environ["POE_NINJA_CONTACT"] = saved_env
+        check(resolve_contact() is not None or "PUT-YOUR" in (saved_const or ""),
+              "a configured contact survives the test unchanged")
 
         # -- H: we only ever talk to allowed endpoints ------------------------
         print("H. endpoint allowlist")
