@@ -74,7 +74,7 @@ from datetime import datetime, timezone
 # Variables. The repository variable wins if both are set.
 #
 # It is NOT a secret. It is meant to be readable by poe.ninja.
-CONTACT = "PUT-YOUR-CONTACT-HERE"          # <-- EDIT ME (e.g. "github.com/yourname")
+CONTACT = "https://github.com/jaysonsmith1998-rgb"          # <-- EDIT ME (e.g. "github.com/yourname")
 
 APP_NAME = "ninja-relay"
 APP_URL = "https://github.com/search?q=ninja-relay"   # generic; harmless if unedited
