@@ -3,8 +3,7 @@ User-Agent: ninja-relay/1.0 (+https://github.com/search?q=ninja-relay; contact: 
 Discovering current league from https://poe.ninja/poe1/api/economy/leagues
 League: Allflame  [discovered from /leagues]
 Fetching exchange:Currency ...
-  NOTE: 102 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
-  exchange-currency.json is identical to the committed copy - left alone
+  304 Not Modified - keeping existing exchange-currency.json
 Fetching currency:Currency ...
   wrote currency.json (64 records, 64 available)
 Fetching currency:Fragment ...
