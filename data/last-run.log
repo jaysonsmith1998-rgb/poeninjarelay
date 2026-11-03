@@ -3,24 +3,24 @@ User-Agent: ninja-relay/1.0 (+https://github.com/search?q=ninja-relay; contact: 
 Discovering current league from https://poe.ninja/poe1/api/economy/leagues
 League: Allflame  [discovered from /leagues]
 Fetching exchange:Currency ...
-  NOTE: 99 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
+  NOTE: 100 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
   exchange-currency.json is identical to the committed copy - left alone
 Fetching currency:Currency ...
-  wrote currency.json (6 records, 6 available)
+  wrote currency.json (5 records, 5 available)
 Fetching currency:Fragment ...
-  wrote fragments.json (9 records, 9 available)
+  wrote fragments.json (7 records, 7 available)
 Fetching item:UniqueWeapon ...
-  wrote unique-weapons.json (520 records, 520 available)
+  wrote unique-weapons.json (518 records, 518 available)
 Fetching item:UniqueArmour ...
-  wrote unique-armour.json (864 records, 864 available)
+  wrote unique-armour.json (862 records, 862 available)
 Fetching item:UniqueAccessory ...
-  wrote unique-accessories.json (357 records, 357 available)
+  wrote unique-accessories.json (355 records, 355 available)
 Fetching item:UniqueFlask ...
   wrote unique-flasks.json (40 records, 40 available)
 Fetching item:UniqueJewel ...
-  wrote unique-jewels.json (161 records, 161 available)
+  wrote unique-jewels.json (163 records, 163 available)
 Fetching item:SkillGem ...
-  wrote skill-gems.json (809 records, 809 available)
+  wrote skill-gems.json (810 records, 810 available)
 Fetching item:ClusterJewel ...
-  wrote cluster-jewels.json (751 records, 751 available)
+  wrote cluster-jewels.json (749 records, 749 available)
 Wrote index.json - 10 file(s), 0 error(s)
