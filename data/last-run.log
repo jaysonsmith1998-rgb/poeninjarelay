@@ -1,27 +1,27 @@
 ninja-relay - snapshotting poe.ninja poe1 economy API (/poe1/api/economy/*)
 User-Agent: ninja-relay/1.0 (+https://github.com/search?q=ninja-relay; contact: github.com/jaysonsmith1998-rgb)
 Discovering current league from https://poe.ninja/poe1/api/economy/leagues
-  note: no temporary challenge league found; fell back to Standard
-League: Standard  [discovered from /leagues]
+League: Covens  [discovered from /leagues]
 Fetching exchange:Currency ...
-  NOTE: 100 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
-  exchange-currency.json is identical to the committed copy - left alone
+  NOTE: 18 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
+  wrote exchange-currency.json (0 records, 0 available)
 Fetching currency:Currency ...
-  wrote currency.json (96 records, 96 available)
+  wrote currency.json (15 records, 15 available)
 Fetching currency:Fragment ...
-  wrote fragments.json (71 records, 71 available)
+  NOTE: 300 rows returned but none had a usable name+price. Fields present: ['icon', 'id', 'name', 'tradeId']
+  wrote fragments.json (0 records, 0 available)
 Fetching item:UniqueWeapon ...
-  wrote unique-weapons.json (716 records, 716 available)
+  wrote unique-weapons.json (92 records, 92 available)
 Fetching item:UniqueArmour ...
-  wrote unique-armour.json (1042 records, 1042 available)
+  wrote unique-armour.json (139 records, 139 available)
 Fetching item:UniqueAccessory ...
-  wrote unique-accessories.json (399 records, 399 available)
+  wrote unique-accessories.json (73 records, 73 available)
 Fetching item:UniqueFlask ...
-  wrote unique-flasks.json (40 records, 40 available)
+  wrote unique-flasks.json (13 records, 13 available)
 Fetching item:UniqueJewel ...
-  wrote unique-jewels.json (250 records, 250 available)
+  wrote unique-jewels.json (6 records, 6 available)
 Fetching item:SkillGem ...
-  wrote skill-gems.json (865 records, 865 available)
+  wrote skill-gems.json (302 records, 302 available)
 Fetching item:ClusterJewel ...
-  wrote cluster-jewels.json (873 records, 873 available)
-Wrote index.json - 10 file(s), 1 error(s)
+  WARNING: no records found in response for item:ClusterJewel
+Wrote index.json - 9 file(s), 1 error(s)
