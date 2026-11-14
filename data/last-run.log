@@ -3,25 +3,24 @@ User-Agent: ninja-relay/1.0 (+https://github.com/search?q=ninja-relay; contact: 
 Discovering current league from https://poe.ninja/poe1/api/economy/leagues
 League: Covens  [discovered from /leagues]
 Fetching exchange:Currency ...
-  NOTE: 18 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
-  wrote exchange-currency.json (0 records, 0 available)
+  NOTE: 47 rows returned but none had a usable name+price. Fields present: ['id', 'maxVolumeCurrency', 'maxVolumeRate', 'primaryValue', 'sparkline', 'volumePrimaryValue']
+  exchange-currency.json is identical to the committed copy - left alone
 Fetching currency:Currency ...
-  wrote currency.json (15 records, 15 available)
+  wrote currency.json (25 records, 25 available)
 Fetching currency:Fragment ...
-  NOTE: 300 rows returned but none had a usable name+price. Fields present: ['icon', 'id', 'name', 'tradeId']
-  wrote fragments.json (0 records, 0 available)
+  wrote fragments.json (1 records, 1 available)
 Fetching item:UniqueWeapon ...
-  wrote unique-weapons.json (92 records, 92 available)
+  wrote unique-weapons.json (301 records, 301 available)
 Fetching item:UniqueArmour ...
-  wrote unique-armour.json (139 records, 139 available)
+  wrote unique-armour.json (468 records, 468 available)
 Fetching item:UniqueAccessory ...
-  wrote unique-accessories.json (73 records, 73 available)
+  wrote unique-accessories.json (224 records, 224 available)
 Fetching item:UniqueFlask ...
-  wrote unique-flasks.json (13 records, 13 available)
+  wrote unique-flasks.json (25 records, 25 available)
 Fetching item:UniqueJewel ...
-  wrote unique-jewels.json (6 records, 6 available)
+  wrote unique-jewels.json (67 records, 67 available)
 Fetching item:SkillGem ...
-  wrote skill-gems.json (302 records, 302 available)
+  wrote skill-gems.json (730 records, 730 available)
 Fetching item:ClusterJewel ...
-  WARNING: no records found in response for item:ClusterJewel
-Wrote index.json - 9 file(s), 1 error(s)
+  wrote cluster-jewels.json (422 records, 422 available)
+Wrote index.json - 10 file(s), 0 error(s)
